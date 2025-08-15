@@ -1,0 +1,169 @@
+package co.edu.escuelaing.httpserver;
+
+import java.net.*;
+import java.io.*;
+import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * A simple web server implementation that listens on a specific port and
+ * serves static files from a predefined directory or responds to specific
+ * API requests.
+ * 
+ * @author sergio.bejarano-r
+ */
+public class HttpServer {
+
+    private static final String WWW_DIR = "www"; 
+    private static final Map<String, String> MIME_TYPES = new HashMap<>();
+
+    static {
+        MIME_TYPES.put("html", "text/html");
+        MIME_TYPES.put("css", "text/css");
+        MIME_TYPES.put("js", "application/javascript");
+        MIME_TYPES.put("jpg", "image/jpeg");   
+        MIME_TYPES.put("jpeg", "image/jpeg"); 
+        MIME_TYPES.put("png", "image/png");    
+    }
+
+
+    /**
+     * Entry point of the HTTP server.
+     *
+     * @param args Command-line arguments (not used).
+     * @throws IOException if an I/O error occurs when opening the socket.
+     */
+    public static void main(String[] args) throws IOException {
+        ServerSocket serverSocket = new ServerSocket(35000);
+        System.out.println("Servidor escuchando en puerto 35000...");
+
+        while (true) {
+            try (Socket clientSocket = serverSocket.accept()) {
+                System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
+
+                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                OutputStream out = clientSocket.getOutputStream();
+
+                String inputLine;
+                boolean isFirstLine = true;
+                URI requestUri = null;
+
+                while ((inputLine = in.readLine()) != null) {
+                    if (isFirstLine) {
+                        String[] requestParts = inputLine.split(" ");
+                        if (requestParts.length >= 2) {
+                            requestUri = new URI(requestParts[1]);
+                            System.out.println("Path: " + requestUri.getPath());
+                        }
+                        isFirstLine = false;
+                    }
+                    if (!in.ready()) break;
+                }
+
+                if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
+                    String response = helloService(requestUri);
+                    out.write(response.getBytes());
+                } else {
+                    serveStaticFile(out, requestUri);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * Serves a static file from the predefined WWW directory.
+     * <p>
+     * If the path is empty, it defaults to "index.html". This method verifies 
+     * the file exists, matches a supported MIME type, and is not a directory. 
+     * Directory traversal attempts are blocked.
+     * </p>
+     *
+     * @param out        The output stream to write the HTTP response.
+     * @param requestUri The URI of the requested resource.
+     * @throws IOException if an I/O error occurs while reading or writing the file.
+     */
+    private static void serveStaticFile(OutputStream out, URI requestUri) throws IOException {
+        String path = requestUri.getPath();
+        if (path.equals("/")) {
+            path = "/index.html"; 
+        }
+
+        if (path.contains("..")) {
+            send404(out);
+            return;
+        }
+
+        File file = new File(WWW_DIR + path);
+        String ext = getExtension(file.getName());
+
+        if (!MIME_TYPES.containsKey(ext) || !file.exists() || file.isDirectory()) {
+            send404(out);
+            return;
+        }
+
+        String contentType = MIME_TYPES.get(ext);
+        byte[] content = Files.readAllBytes(file.toPath());
+
+        String header = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: " + contentType + "\r\n" +
+                        "Content-Length: " + content.length + "\r\n" +
+                        "Connection: close\r\n\r\n";
+
+        out.write(header.getBytes());
+        out.write(content);
+    }
+
+    
+    /**
+     * Sends a basic HTTP 404 Not Found response to the client.
+     *
+     * @param out The output stream to write the HTTP response.
+     * @throws IOException if an I/O error occurs while writing the response.
+     */
+    private static void send404(OutputStream out) throws IOException {
+        String msg = "<h1>404 Not Found</h1>";
+        String header = "HTTP/1.1 404 Not Found\r\n" +
+                        "Content-Type: text/html\r\n" +
+                        "Content-Length: " + msg.length() + "\r\n" +
+                        "Connection: close\r\n\r\n";
+        out.write(header.getBytes());
+        out.write(msg.getBytes());
+    }
+
+    /**
+     * Extracts the file extension from the given file name.
+     *
+     * @param fileName The file name to process.
+     * @return The lowercase file extension, or an empty string if none is found.
+     */
+    private static String getExtension(String fileName) {
+        int idx = fileName.lastIndexOf('.');
+        return (idx > 0 && idx < fileName.length() - 1) ? fileName.substring(idx + 1).toLowerCase() : "";
+    }
+
+    
+    /**
+     * Provides a basic JSON-based hello service.
+     * <p>
+     * If a "name" parameter is present in the query string, it is used in the 
+     * response; otherwise, it defaults to "Mundo".
+     * </p>
+     *
+     * @param requesturi The URI of the request containing optional query parameters.
+     * @return An HTTP 200 OK response with a JSON message.
+     */
+    private static String helloService(URI requesturi) {
+        String name = "Mundo";
+        String query = requesturi.getQuery();
+        if (query != null && query.contains("=")) {
+            name = query.split("=")[1];
+        }
+        return "HTTP/1.1 200 OK\r\n" +
+               "Content-Type: application/json\r\n" +
+               "Connection: close\r\n\r\n" +
+               "{\"mensaje\": \"Hola " + name + "\"}";
+    }
+}
