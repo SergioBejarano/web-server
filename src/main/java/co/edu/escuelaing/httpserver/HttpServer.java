@@ -15,60 +15,96 @@ import java.util.Map;
  */
 public class HttpServer {
 
-    private static final String WWW_DIR = "www"; 
+    private static final String WWW_DIR = "www";
     private static final Map<String, String> MIME_TYPES = new HashMap<>();
 
     static {
         MIME_TYPES.put("html", "text/html");
         MIME_TYPES.put("css", "text/css");
         MIME_TYPES.put("js", "application/javascript");
-        MIME_TYPES.put("jpg", "image/jpeg");   
-        MIME_TYPES.put("jpeg", "image/jpeg"); 
-        MIME_TYPES.put("png", "image/png");    
+        MIME_TYPES.put("jpg", "image/jpeg");
+        MIME_TYPES.put("jpeg", "image/jpeg");
+        MIME_TYPES.put("png", "image/png");
     }
-
 
     /**
      * Entry point of the HTTP server.
+     *
+     * Handles GET and POST requests. GET requests to /app/hello return a JSON
+     * greeting.
+     * POST requests to /app/hello return a JSON echo of the message sent in the
+     * body.
+     * Other requests serve static files or return 404 if not found.
      *
      * @param args Command-line arguments (not used).
      * @throws IOException if an I/O error occurs when opening the socket.
      */
     public static void main(String[] args) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(35000);
-        System.out.println("Servidor escuchando en puerto 35000...");
+        try (ServerSocket serverSocket = new ServerSocket(35000)) {
+            System.out.println("Servidor escuchando en puerto 35000...");
 
-        while (true) {
-            try (Socket clientSocket = serverSocket.accept()) {
-                System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
+            while (true) {
+                try (Socket clientSocket = serverSocket.accept()) {
+                    System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
 
-                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                OutputStream out = clientSocket.getOutputStream();
+                    BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                    OutputStream out = clientSocket.getOutputStream();
 
-                String inputLine;
-                boolean isFirstLine = true;
-                URI requestUri = null;
+                    String inputLine;
+                    boolean isFirstLine = true;
+                    URI requestUri = null;
+                    String method = "";
+                    int contentLength = 0;
 
-                while ((inputLine = in.readLine()) != null) {
-                    if (isFirstLine) {
-                        String[] requestParts = inputLine.split(" ");
-                        if (requestParts.length >= 2) {
-                            requestUri = new URI(requestParts[1]);
-                            System.out.println("Path: " + requestUri.getPath());
+                    // Leer cabecera HTTP
+                    while ((inputLine = in.readLine()) != null) {
+                        if (isFirstLine) {
+                            String[] requestParts = inputLine.split(" ");
+                            if (requestParts.length >= 2) {
+                                method = requestParts[0];
+                                requestUri = new URI(requestParts[1]);
+                                System.out.println("Método: " + method + " | Path: " + requestUri.getPath());
+                            }
+                            isFirstLine = false;
+                        } else if (inputLine.startsWith("Content-Length:")) {
+                            contentLength = Integer.parseInt(inputLine.split(":")[1].trim());
                         }
-                        isFirstLine = false;
+                        if (inputLine.isEmpty())
+                            break;
                     }
-                    if (!in.ready()) break;
-                }
 
-                if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
-                    String response = helloService(requestUri);
-                    out.write(response.getBytes());
-                } else {
-                    serveStaticFile(out, requestUri);
+                    if ("GET".equalsIgnoreCase(method)) {
+                        if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
+                            String response = helloService(requestUri);
+                            out.write(response.getBytes());
+                        } else {
+                            serveStaticFile(out, requestUri);
+                        }
+                    } else if ("POST".equalsIgnoreCase(method)) {
+                        String body = "";
+                        if (contentLength > 0) {
+                            char[] bodyChars = new char[contentLength];
+                            int read = 0;
+                            while (read < contentLength) {
+                                int r = in.read(bodyChars, read, contentLength - read);
+                                if (r == -1)
+                                    break;
+                                read += r;
+                            }
+                            body = new String(bodyChars);
+                        }
+                        if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
+                            String response = echoService(body);
+                            out.write(response.getBytes());
+                        } else {
+                            send404(out);
+                        }
+                    } else {
+                        send404(out);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
             }
         }
     }
@@ -76,8 +112,8 @@ public class HttpServer {
     /**
      * Serves a static file from the predefined WWW directory.
      * <p>
-     * If the path is empty, it defaults to "index.html". This method verifies 
-     * the file exists, matches a supported MIME type, and is not a directory. 
+     * If the path is empty, it defaults to "index.html". This method verifies
+     * the file exists, matches a supported MIME type, and is not a directory.
      * Directory traversal attempts are blocked.
      * </p>
      *
@@ -88,7 +124,7 @@ public class HttpServer {
     private static void serveStaticFile(OutputStream out, URI requestUri) throws IOException {
         String path = requestUri.getPath();
         if (path.equals("/")) {
-            path = "/index.html"; 
+            path = "/index.html";
         }
 
         if (path.contains("..")) {
@@ -108,15 +144,14 @@ public class HttpServer {
         byte[] content = Files.readAllBytes(file.toPath());
 
         String header = "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: " + contentType + "\r\n" +
-                        "Content-Length: " + content.length + "\r\n" +
-                        "Connection: close\r\n\r\n";
+                "Content-Type: " + contentType + "\r\n" +
+                "Content-Length: " + content.length + "\r\n" +
+                "Connection: close\r\n\r\n";
 
         out.write(header.getBytes());
         out.write(content);
     }
 
-    
     /**
      * Sends a basic HTTP 404 Not Found response to the client.
      *
@@ -126,9 +161,9 @@ public class HttpServer {
     private static void send404(OutputStream out) throws IOException {
         String msg = "<h1>404 Not Found</h1>";
         String header = "HTTP/1.1 404 Not Found\r\n" +
-                        "Content-Type: text/html\r\n" +
-                        "Content-Length: " + msg.length() + "\r\n" +
-                        "Connection: close\r\n\r\n";
+                "Content-Type: text/html\r\n" +
+                "Content-Length: " + msg.length() + "\r\n" +
+                "Connection: close\r\n\r\n";
         out.write(header.getBytes());
         out.write(msg.getBytes());
     }
@@ -144,15 +179,15 @@ public class HttpServer {
         return (idx > 0 && idx < fileName.length() - 1) ? fileName.substring(idx + 1).toLowerCase() : "";
     }
 
-    
     /**
-     * Provides a basic JSON-based hello service.
+     * Provides a basic JSON-based hello service for GET requests.
      * <p>
-     * If a "name" parameter is present in the query string, it is used in the 
+     * If a "name" parameter is present in the query string, it is used in the
      * response; otherwise, it defaults to "Mundo".
      * </p>
      *
-     * @param requesturi The URI of the request containing optional query parameters.
+     * @param requesturi The URI of the request containing optional query
+     *                   parameters.
      * @return An HTTP 200 OK response with a JSON message.
      */
     private static String helloService(URI requesturi) {
@@ -162,8 +197,24 @@ public class HttpServer {
             name = query.split("=")[1];
         }
         return "HTTP/1.1 200 OK\r\n" +
-               "Content-Type: application/json\r\n" +
-               "Connection: close\r\n\r\n" +
-               "{\"mensaje\": \"Hola " + name + "\"}";
+                "Content-Type: application/json\r\n" +
+                "Connection: close\r\n\r\n" +
+                "{\"mensaje\": \"Hola " + name + "\"}";
+    }
+
+    /**
+     * Provides a basic JSON-based echo service for POST requests.
+     * <p>
+     * Returns the message sent in the body as a JSON object with key "echo".
+     * </p>
+     *
+     * @param body The body of the POST request.
+     * @return An HTTP 200 OK response with a JSON echo message.
+     */
+    private static String echoService(String body) {
+        return "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: application/json\r\n" +
+                "Connection: close\r\n\r\n" +
+                "{\"echo\": \"" + body.replace("\"", "\\\"") + "\"}";
     }
 }
