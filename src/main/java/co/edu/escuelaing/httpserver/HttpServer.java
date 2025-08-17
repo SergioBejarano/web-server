@@ -44,11 +44,11 @@ public class HttpServer {
             System.out.println("Servidor escuchando en puerto 35000...");
 
             while (true) {
-                try (Socket clientSocket = serverSocket.accept()) {
+                try (
+                        Socket clientSocket = serverSocket.accept();
+                        BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                        OutputStream out = clientSocket.getOutputStream()) {
                     System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
-
-                    BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                    OutputStream out = clientSocket.getOutputStream();
 
                     String inputLine;
                     boolean isFirstLine = true;
@@ -77,6 +77,7 @@ public class HttpServer {
                         if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
                             String response = helloService(requestUri);
                             out.write(response.getBytes());
+                            out.flush();
                         } else {
                             serveStaticFile(out, requestUri);
                         }
@@ -96,12 +97,14 @@ public class HttpServer {
                         if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
                             String response = echoService(body);
                             out.write(response.getBytes());
+                            out.flush();
                         } else {
                             send404(out);
                         }
                     } else {
                         send404(out);
                     }
+
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -150,6 +153,7 @@ public class HttpServer {
 
         out.write(header.getBytes());
         out.write(content);
+        out.flush();
     }
 
     /**
@@ -166,6 +170,7 @@ public class HttpServer {
                 "Connection: close\r\n\r\n";
         out.write(header.getBytes());
         out.write(msg.getBytes());
+        out.flush();
     }
 
     /**
