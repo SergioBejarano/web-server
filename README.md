@@ -10,7 +10,7 @@ This project implements a basic HTTP server in Java. It serves static files from
 
 ## Features
 
-- Serves static files (HTML, CSS, JS, images) from the `www` folder.
+- Serves static files (HTML, CSS, JS, images) from the `resources` folder.
 - Handles GET and POST requests for REST endpoints.
 - Easily extensible for new REST services.
 - No external dependencies required except Maven for build.
@@ -39,7 +39,15 @@ This project implements a basic HTTP server in Java. It serves static files from
    ```
 <img width="2879" height="1702" alt="image" src="https://github.com/user-attachments/assets/eebf5c40-da41-4e51-a3d4-3512f0cccf30" />
 
-## REST Endpoints
+From console:
+<img width="2879" height="861" alt="image" src="https://github.com/user-attachments/assets/68973092-b5e7-4a67-bc97-ebcfe5037a86" />
+
+## Unit Tests
+
+<img width="2174" height="437" alt="image" src="https://github.com/user-attachments/assets/96cd9f5f-c21a-4087-947e-87ee7be7ef32" />
+
+
+## REST Endpoints - Evaluation with tests
 
 ### GET /app/hello
 
@@ -56,6 +64,10 @@ This project implements a basic HTTP server in Java. It serves static files from
 <img width="2879" height="1205" alt="image" src="https://github.com/user-attachments/assets/da075283-7470-4735-9131-e7e9e5b055dd" />
 
 <img width="1412" height="280" alt="image" src="https://github.com/user-attachments/assets/199f8b31-4e56-433b-9897-3a0cb35ba5a8" />
+
+In case of not including any name to test GET:
+
+<img width="2879" height="765" alt="image" src="https://github.com/user-attachments/assets/8e4a1bac-7b69-4418-9cb8-1f7cfcd59fc8" />
 
 ### POST /app/hello
 
@@ -80,7 +92,7 @@ From web page:
 
 ## Static Files
 
-Place your HTML, CSS, JS, and image files in the `www` directory.  
+Place your HTML, CSS, JS, and image files in the `resources` directory.  
 The server will serve them automatically.
 
 <img width="2879" height="1681" alt="image" src="https://github.com/user-attachments/assets/4c1ed4ea-0e83-47f2-8b6b-eef3b5d8a7c6" />
@@ -88,6 +100,30 @@ The server will serve them automatically.
 <img width="2879" height="1706" alt="image" src="https://github.com/user-attachments/assets/0f6ccf66-4e79-426d-a77f-64707dbe6af2" />
 
 <img width="2876" height="1707" alt="image" src="https://github.com/user-attachments/assets/e4876115-1515-4cb1-9b92-468ed1367706" />
+
+When the file does not exist: 
+
+<img width="2879" height="1177" alt="image" src="https://github.com/user-attachments/assets/d17e6413-72ce-4560-8b13-bb3eecd30924" />
+
+
+## Prototype architecture
+
+This means that the prototype flow is as follows:
+
+The client sends a request (GET or POST).
+
+HttpServer analyzes the route:
+
+If it is a REST service → it calls RestServices.
+
+If it is a file → it returns it.
+
+If it does not exist → it sends a 404.
+
+RestServices builds the HTTP response with JSON.
+
+HttpServer sends it back to the client.
+![My First Board (2)](https://github.com/user-attachments/assets/b6b81be5-0bac-4aee-8ddf-5c4bc15b7830)
 
 
 ## Author
