@@ -15,7 +15,7 @@ import java.util.Map;
  */
 public class HttpServer {
 
-    private static final String WWW_DIR = "www";
+    private static final String WWW_DIR = "src/main/java/co/edu/escuelaing/httpserver/resources";
     private static final Map<String, String> MIME_TYPES = new HashMap<>();
 
     static {
@@ -42,21 +42,17 @@ public class HttpServer {
     public static void main(String[] args) throws IOException {
         try (ServerSocket serverSocket = new ServerSocket(35000)) {
             System.out.println("Servidor escuchando en puerto 35000...");
-
             while (true) {
                 try (
                         Socket clientSocket = serverSocket.accept();
                         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                         OutputStream out = clientSocket.getOutputStream()) {
                     System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
-
                     String inputLine;
                     boolean isFirstLine = true;
                     URI requestUri = null;
                     String method = "";
                     int contentLength = 0;
-
-                    // Leer cabecera HTTP
                     while ((inputLine = in.readLine()) != null) {
                         if (isFirstLine) {
                             String[] requestParts = inputLine.split(" ");
@@ -72,10 +68,9 @@ public class HttpServer {
                         if (inputLine.isEmpty())
                             break;
                     }
-
                     if ("GET".equalsIgnoreCase(method)) {
                         if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
-                            String response = helloService(requestUri);
+                            String response = RestServices.helloService(requestUri);
                             out.write(response.getBytes());
                             out.flush();
                         } else {
@@ -95,7 +90,7 @@ public class HttpServer {
                             body = new String(bodyChars);
                         }
                         if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
-                            String response = echoService(body);
+                            String response = RestServices.echoService(body);
                             out.write(response.getBytes());
                             out.flush();
                         } else {
@@ -104,7 +99,6 @@ public class HttpServer {
                     } else {
                         send404(out);
                     }
-
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -184,42 +178,4 @@ public class HttpServer {
         return (idx > 0 && idx < fileName.length() - 1) ? fileName.substring(idx + 1).toLowerCase() : "";
     }
 
-    /**
-     * Provides a basic JSON-based hello service for GET requests.
-     * <p>
-     * If a "name" parameter is present in the query string, it is used in the
-     * response; otherwise, it defaults to "Mundo".
-     * </p>
-     *
-     * @param requesturi The URI of the request containing optional query
-     *                   parameters.
-     * @return An HTTP 200 OK response with a JSON message.
-     */
-    private static String helloService(URI requesturi) {
-        String name = "Mundo";
-        String query = requesturi.getQuery();
-        if (query != null && query.contains("=")) {
-            name = query.split("=")[1];
-        }
-        return "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: application/json\r\n" +
-                "Connection: close\r\n\r\n" +
-                "{\"mensaje\": \"Hola " + name + "\"}";
-    }
-
-    /**
-     * Provides a basic JSON-based echo service for POST requests.
-     * <p>
-     * Returns the message sent in the body as a JSON object with key "echo".
-     * </p>
-     *
-     * @param body The body of the POST request.
-     * @return An HTTP 200 OK response with a JSON echo message.
-     */
-    private static String echoService(String body) {
-        return "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: application/json\r\n" +
-                "Connection: close\r\n\r\n" +
-                "{\"echo\": \"" + body.replace("\"", "\\\"") + "\"}";
-    }
 }
