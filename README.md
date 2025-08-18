@@ -1,6 +1,6 @@
 # Non-Concurrent Web Server
 
-This project implements a basic HTTP server in Java. It serves static files from the `www` directory and exposes two REST services:
+This project implements a basic HTTP server in Java. It serves static files from the `resources` directory and exposes two REST services:
 
 - **GET /app/hello?name=YourName**  
   Returns a JSON greeting message.
@@ -14,6 +14,26 @@ This project implements a basic HTTP server in Java. It serves static files from
 - Handles GET and POST requests for REST endpoints.
 - Easily extensible for new REST services.
 - No external dependencies required except Maven for build.
+
+## Verifying Java and Maven Versions
+
+Before compiling or running this project, make sure that both **Java** and **Maven** are properly installed and configured on the system.
+
+### Check Java version
+Run the following command in the terminal:
+
+```bash
+java -version
+```
+
+Check Maven version:
+
+```bash
+mvn -version
+```
+
+<img width="2878" height="507" alt="image" src="https://github.com/user-attachments/assets/aa9e3773-707e-4f9b-9924-c60059b555b7" />
+
 
 ## How to Build and Run
 
@@ -108,6 +128,8 @@ When the file does not exist:
 
 ## Prototype architecture
 
+![My First Board (2)](https://github.com/user-attachments/assets/b6b81be5-0bac-4aee-8ddf-5c4bc15b7830)
+
 This means that the prototype flow is as follows:
 
 The client sends a request (GET or POST).
@@ -123,8 +145,6 @@ If it does not exist → it sends a 404.
 RestServices builds the HTTP response with JSON.
 
 HttpServer sends it back to the client.
-![My First Board (2)](https://github.com/user-attachments/assets/b6b81be5-0bac-4aee-8ddf-5c4bc15b7830)
-
 
 ## Author
 
