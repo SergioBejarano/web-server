@@ -11,6 +11,11 @@ import java.util.Map;
  * serves static files from a predefined directory or responds to specific
  * API requests.
  * 
+ * Supports:
+ * - GET /app/hello -> returns a JSON greeting.
+ * - POST /app/hello -> echoes back the JSON message received in the body.
+ * - Static file serving from resources directory.
+ * 
  * @author sergio.bejarano-r
  */
 public class HttpServer {
@@ -30,75 +35,19 @@ public class HttpServer {
     /**
      * Entry point of the HTTP server.
      *
-     * Handles GET and POST requests. GET requests to /app/hello return a JSON
-     * greeting.
-     * POST requests to /app/hello return a JSON echo of the message sent in the
-     * body.
-     * Other requests serve static files or return 404 if not found.
-     *
      * @param args Command-line arguments (not used).
      * @throws IOException if an I/O error occurs when opening the socket.
      */
     public static void main(String[] args) throws IOException {
         try (ServerSocket serverSocket = new ServerSocket(35000)) {
-            System.out.println("Servidor escuchando en puerto 35000...");
+            System.out.println("Server listening on port 35000...");
             while (true) {
                 try (
                         Socket clientSocket = serverSocket.accept();
                         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                         OutputStream out = clientSocket.getOutputStream()) {
-                    System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
-                    String inputLine;
-                    boolean isFirstLine = true;
-                    URI requestUri = null;
-                    String method = "";
-                    int contentLength = 0;
-                    while ((inputLine = in.readLine()) != null) {
-                        if (isFirstLine) {
-                            String[] requestParts = inputLine.split(" ");
-                            if (requestParts.length >= 2) {
-                                method = requestParts[0];
-                                requestUri = new URI(requestParts[1]);
-                                System.out.println("Método: " + method + " | Path: " + requestUri.getPath());
-                            }
-                            isFirstLine = false;
-                        } else if (inputLine.startsWith("Content-Length:")) {
-                            contentLength = Integer.parseInt(inputLine.split(":")[1].trim());
-                        }
-                        if (inputLine.isEmpty())
-                            break;
-                    }
-                    if ("GET".equalsIgnoreCase(method)) {
-                        if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
-                            String response = RestServices.helloService(requestUri);
-                            out.write(response.getBytes());
-                            out.flush();
-                        } else {
-                            serveStaticFile(out, requestUri);
-                        }
-                    } else if ("POST".equalsIgnoreCase(method)) {
-                        String body = "";
-                        if (contentLength > 0) {
-                            char[] bodyChars = new char[contentLength];
-                            int read = 0;
-                            while (read < contentLength) {
-                                int r = in.read(bodyChars, read, contentLength - read);
-                                if (r == -1)
-                                    break;
-                                read += r;
-                            }
-                            body = new String(bodyChars);
-                        }
-                        if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
-                            String response = RestServices.echoService(body);
-                            out.write(response.getBytes());
-                            out.flush();
-                        } else {
-                            send404(out);
-                        }
-                    } else {
-                        send404(out);
-                    }
+                    System.out.println("Client connected: " + clientSocket.getInetAddress());
+                    handleClientRequest(in, out);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -107,16 +56,109 @@ public class HttpServer {
     }
 
     /**
-     * Serves a static file from the predefined WWW directory.
-     * <p>
-     * If the path is empty, it defaults to "index.html". This method verifies
-     * the file exists, matches a supported MIME type, and is not a directory.
-     * Directory traversal attempts are blocked.
-     * </p>
+     * Handles an individual client request, parsing the HTTP method,
+     * URI, headers, and body if needed.
      *
-     * @param out        The output stream to write the HTTP response.
-     * @param requestUri The URI of the requested resource.
-     * @throws IOException if an I/O error occurs while reading or writing the file.
+     * @param in  Input stream from the client.
+     * @param out Output stream to send response.
+     * @throws Exception if an error occurs while processing the request.
+     */
+    private static void handleClientRequest(BufferedReader in, OutputStream out) throws Exception {
+        String method = "";
+        URI requestUri = null;
+        int contentLength = 0;
+        boolean isFirstLine = true;
+        String inputLine;
+        while ((inputLine = in.readLine()) != null) {
+            if (isFirstLine) {
+                String[] requestParts = inputLine.split(" ");
+                if (requestParts.length >= 2) {
+                    method = requestParts[0];
+                    requestUri = new URI(requestParts[1]);
+                    System.out.println("Method: " + method + " | Path: " + requestUri.getPath());
+                }
+                isFirstLine = false;
+            } else if (inputLine.startsWith("Content-Length:")) {
+                contentLength = Integer.parseInt(inputLine.split(":")[1].trim());
+            }
+            if (inputLine.isEmpty())
+                break;
+        }
+        if ("GET".equalsIgnoreCase(method)) {
+            handleGet(out, requestUri);
+        } else if ("POST".equalsIgnoreCase(method)) {
+            handlePost(in, out, requestUri, contentLength);
+        } else {
+            send404(out);
+        }
+    }
+
+    /**
+     * Handles a GET request.
+     *
+     * @param out        Output stream to client.
+     * @param requestUri The URI requested.
+     * @throws IOException if an I/O error occurs.
+     */
+    private static void handleGet(OutputStream out, URI requestUri) throws IOException {
+        if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
+            out.write(RestServices.helloService(requestUri).getBytes());
+            out.flush();
+        } else {
+            serveStaticFile(out, requestUri);
+        }
+    }
+
+    /**
+     * Handles a POST request.
+     *
+     * @param in            Input stream from client.
+     * @param out           Output stream to client.
+     * @param requestUri    The URI requested.
+     * @param contentLength Content length of the body.
+     * @throws IOException if an I/O error occurs.
+     */
+    private static void handlePost(BufferedReader in, OutputStream out, URI requestUri, int contentLength)
+            throws IOException {
+        String body = readRequestBody(in, contentLength);
+
+        if (requestUri != null && requestUri.getPath().startsWith("/app/hello")) {
+            out.write(RestServices.echoService(body).getBytes());
+            out.flush();
+        } else {
+            send404(out);
+        }
+    }
+
+    /**
+     * Reads the request body based on the Content-Length header.
+     *
+     * @param in            Input stream from client.
+     * @param contentLength Number of characters to read.
+     * @return Request body as String.
+     * @throws IOException if an I/O error occurs.
+     */
+    private static String readRequestBody(BufferedReader in, int contentLength) throws IOException {
+        if (contentLength <= 0) {
+            return "";
+        }
+        char[] bodyChars = new char[contentLength];
+        int read = 0;
+        while (read < contentLength) {
+            int r = in.read(bodyChars, read, contentLength - read);
+            if (r == -1)
+                break;
+            read += r;
+        }
+        return new String(bodyChars);
+    }
+
+    /**
+     * Serves a static file from the predefined WWW directory.
+     *
+     * @param out        Output stream to client.
+     * @param requestUri Requested URI.
+     * @throws IOException if an I/O error occurs.
      */
     private static void serveStaticFile(OutputStream out, URI requestUri) throws IOException {
         String path = requestUri.getPath();
@@ -151,10 +193,10 @@ public class HttpServer {
     }
 
     /**
-     * Sends a basic HTTP 404 Not Found response to the client.
+     * Sends a basic HTTP 404 Not Found response.
      *
-     * @param out The output stream to write the HTTP response.
-     * @throws IOException if an I/O error occurs while writing the response.
+     * @param out Output stream to client.
+     * @throws IOException if an I/O error occurs.
      */
     private static void send404(OutputStream out) throws IOException {
         String msg = "<h1>404 Not Found</h1>";
@@ -168,10 +210,10 @@ public class HttpServer {
     }
 
     /**
-     * Extracts the file extension from the given file name.
+     * Extracts the file extension from a file name.
      *
-     * @param fileName The file name to process.
-     * @return The lowercase file extension, or an empty string if none is found.
+     * @param fileName File name.
+     * @return Lowercase file extension or empty string if not found.
      */
     private static String getExtension(String fileName) {
         int idx = fileName.lastIndexOf('.');
